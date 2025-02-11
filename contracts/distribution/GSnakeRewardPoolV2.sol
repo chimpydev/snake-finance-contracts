@@ -55,6 +55,8 @@ contract GSnakeRewardPool is ReentrancyGuard {
 
     // Info of each user that stakes LP tokens.
     mapping(uint256 => mapping(address => UserInfo)) public userInfo;
+    // Pending rewards for each user in each pool (pending rewards accrued since last deposit/withdrawal)
+    mapping(uint256 => mapping(address => uint256)) public pendingRewards;
 
     // Total allocation points. Must be the sum of all allocation points in all pools.
     uint256 public totalAllocPoint = 0;
@@ -157,7 +159,7 @@ contract GSnakeRewardPool is ReentrancyGuard {
             isStarted: _isStarted,
             gaugeInfo: GaugeInfo(false, IGauge(address(0)), rewardTokensGauge)
         }));
-        enableGauge(poolInfo.length - 1);
+        // enableGauge(poolInfo.length - 1);
         
         
         if (_isStarted) {
@@ -324,8 +326,15 @@ contract GSnakeRewardPool is ReentrancyGuard {
     }
 
     function setGaugeRewardTokens(uint256 _pid, address[] calldata _rewardTokens) public onlyOperator {
+        // Check that the pool is a gauge pool
         PoolInfo storage pool = poolInfo[_pid];
-        require(pool.gaugeInfo.isGauge, "SnakeGenesisRewardPool: not a gauge pool");
+        require(pool.gaugeInfo.isGauge, "ShareRewardPool: not a gauge pool");
+        // Check that the reward tokens are not any pool token. This check should be enough as we never have deposit tokens as gauge reward tokens
+        uint256 length = poolInfo.length;
+        for (uint256 pid = 0; pid < length; ++pid) {
+            PoolInfo storage pool = poolInfo[pid];
+            require(_token != pool.token, "ShareRewardPool: Token cannot be pool token");
+        }
         pool.gaugeInfo.rewardTokens = _rewardTokens;
     }
     
@@ -352,8 +361,9 @@ contract GSnakeRewardPool is ReentrancyGuard {
         if (user.amount > 0) {
             uint256 _pending = user.amount.mul(pool.accGsnakePerShare).div(1e18).sub(user.rewardDebt);
             if (_pending > 0) {
-                safeGsnakeTransfer(_sender, _pending);
-                emit RewardPaid(_sender, _pending);
+                // safeGsnakeTransfer(_sender, _pending);
+                // emit RewardPaid(_sender, _pending);
+                pendingRewards[_pid][_sender] = pendingRewards[_pid][_sender].add(_pending);    
             }
         }
         if (_amount > 0 ) {
@@ -377,8 +387,9 @@ contract GSnakeRewardPool is ReentrancyGuard {
         updatePoolWithGaugeDeposit(_pid);
         uint256 _pending = user.amount.mul(pool.accGsnakePerShare).div(1e18).sub(user.rewardDebt);
         if (_pending > 0) {
-            safeGsnakeTransfer(_sender, _pending);
-            emit RewardPaid(_sender, _pending);
+            // safeGsnakeTransfer(_sender, _pending);
+            // emit RewardPaid(_sender, _pending);
+            pendingRewards[_pid][_sender] = pendingRewards[_pid][_sender].add(_pending);
         }
         if (_amount > 0) {
             user.amount = user.amount.sub(_amount);
@@ -388,6 +399,46 @@ contract GSnakeRewardPool is ReentrancyGuard {
         user.rewardDebt = user.amount.mul(pool.accGsnakePerShare).div(1e18);
         emit Withdraw(_sender, _pid, _amount);
     }
+
+    function claimRewards(uint256 _pid) public nonReentrant {
+        address _sender = msg.sender;
+        PoolInfo storage pool = poolInfo[_pid];
+        UserInfo storage user = userInfo[_pid][_sender];
+
+        // Ensure rewards are updated
+        updatePool(_pid);
+        updatePoolWithGaugeDeposit(_pid);
+
+        // Calculate the latest pending rewards
+        uint256 _pending = user.amount.mul(pool.accGsnakePerShare).div(1e18).sub(user.rewardDebt);
+
+        if (_pending > 0) {
+            // Store the new pending rewards
+            pendingRewards[_pid][_sender] = pendingRewards[_pid][_sender].add(_pending);
+        }
+
+        uint256 rewardsToClaim = pendingRewards[_pid][_sender];
+
+        if (rewardsToClaim > 0) {
+            pendingRewards[_pid][_sender] = 0;
+            safeGsnakeTransfer(_sender, rewardsToClaim);
+            emit RewardPaid(_sender, rewardsToClaim);
+        }
+
+        // Update the user’s reward debt
+        user.rewardDebt = user.amount.mul(pool.accGsnakePerShare).div(1e18);
+    }
+
+
+    // function claimRewards(uint256 _pid) public nonReentrant {
+    //     withdraw(_pid, 0); // withdraw 0 to claim rewards
+    //     uint256 _pending = pendingRewards[_pid][msg.sender];
+    //     if (_pending > 0) {
+    //         pendingRewards[_pid][msg.sender] = 0;
+    //         safeGsnakeTransfer(msg.sender, _pending);
+    //         emit RewardPaid(msg.sender, _pending);
+    //     }
+    // }
 
     // Withdraw without caring about rewards. EMERGENCY ONLY.
     function emergencyWithdraw(uint256 _pid) public nonReentrant {
