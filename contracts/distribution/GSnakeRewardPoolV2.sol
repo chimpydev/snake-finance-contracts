@@ -18,6 +18,11 @@ contract GSnakeRewardPool is ReentrancyGuard {
     using SafeMath for uint256;
     using SafeERC20 for IERC20;
 
+    enum GaugeDex {
+        SHADOW,
+        SWAPX
+    }
+
     // governance
     address public operator;
 
@@ -29,6 +34,7 @@ contract GSnakeRewardPool is ReentrancyGuard {
 
     struct GaugeInfo {
         bool isGauge;   // If this is a gauge
+        GaugeDex gaugeDex; // Dex of the gauge
         IGauge gauge;  // The gauge
         address[] rewardTokens; // tokens that are used in the gauge
     }
@@ -282,41 +288,68 @@ contract GSnakeRewardPool is ReentrancyGuard {
     }
 
     // Claim rewards to treasury
-    function claimLegacyRewards(uint256 _pid) public {
+    function claimAllRewards(uint256 _pid) public {
+
         PoolInfo storage pool = poolInfo[_pid];
         if (pool.gaugeInfo.isGauge) {
-            if (pool.gaugeInfo.rewardTokens.length > 0) {     
 
-                uint256[] memory beforeBalances = new uint256[](pool.gaugeInfo.rewardTokens.length);
+            // STILL NEED TO TAKE INTO ACCOUNT THE REWARDS COULD BE A "POOL DEPOSIT TOKEN" of other pid pool and should not be ever claimed OR should do before and after balance check
+            // NEED TO CHECK IF REWARD IS xSHADOW, and if yes need to mint x33 and then transfer to bribesSafe
+            if (pool.gaugeInfo.gaugeDex == GaugeDex.SHADOW) {
+                address[] memory gaugeRewardTokens = poolInfo.gaugeInfo.gauge.rewardsList();
+                pool.gaugeInfo.gauge.getReward(address(this), gaugeRewardTokens);
 
-                // Store balances before claim
-                for (uint256 i = 0; i < pool.gaugeInfo.rewardTokens.length; i++) {
-                    beforeBalances[i] = IERC20(pool.gaugeInfo.rewardTokens[i]).balanceOf(address(this));
-                }
-
-                address[] memory gaugesToCheck = new address[](1);
-                gaugesToCheck[0] = address(pool.gaugeInfo.gauge);
-                
-                address[][] memory gaugeRewardTokens = new address[][](1);
-                gaugeRewardTokens[0] = pool.gaugeInfo.rewardTokens;
-                
-                voter.claimRewards(gaugesToCheck, gaugeRewardTokens);
-
-                for (uint256 i = 0; i < pool.gaugeInfo.rewardTokens.length; i++) {
-                    IERC20 rewardToken = IERC20(pool.gaugeInfo.rewardTokens[i]);
-                    uint256 afterBalance = rewardToken.balanceOf(address(this));
-                    uint256 rewardAmount = afterBalance - beforeBalances[i];
+                for (uint256 i = 0; i < gaugeRewardTokens.length; i++) {
+                    IERC20 rewardToken = IERC20(gaugeRewardTokens[i]);
+                    uint256 rewardAmount = rewardToken.balanceOf(address(this));
 
                     if (rewardAmount > 0) {
                         rewardToken.safeTransfer(bribesSafe, rewardAmount);
                     }
                 }
             }
+            if (pool.gaugeInfo.gaugeDex == GaugeDex.SWAPX) {
+                // Add the logic for swapx
+            }
         }
     }
 
+    // // Claim rewards to treasury
+    // function claimLegacyRewards(uint256 _pid) public {
+    //     PoolInfo storage pool = poolInfo[_pid];
+    //     if (pool.gaugeInfo.isGauge) {
+    //         if (pool.gaugeInfo.rewardTokens.length > 0) {     
+
+    //             uint256[] memory beforeBalances = new uint256[](pool.gaugeInfo.rewardTokens.length);
+
+    //             // Store balances before claim
+    //             for (uint256 i = 0; i < pool.gaugeInfo.rewardTokens.length; i++) {
+    //                 beforeBalances[i] = IERC20(pool.gaugeInfo.rewardTokens[i]).balanceOf(address(this));
+    //             }
+
+    //             address[] memory gaugesToCheck = new address[](1);
+    //             gaugesToCheck[0] = address(pool.gaugeInfo.gauge);
+                
+    //             address[][] memory gaugeRewardTokens = new address[][](1);
+    //             gaugeRewardTokens[0] = pool.gaugeInfo.rewardTokens;
+                
+    //             voter.claimRewards(gaugesToCheck, gaugeRewardTokens);
+
+    //             for (uint256 i = 0; i < pool.gaugeInfo.rewardTokens.length; i++) {
+    //                 IERC20 rewardToken = IERC20(pool.gaugeInfo.rewardTokens[i]);
+    //                 uint256 afterBalance = rewardToken.balanceOf(address(this));
+    //                 uint256 rewardAmount = afterBalance - beforeBalances[i];
+
+    //                 if (rewardAmount > 0) {
+    //                     rewardToken.safeTransfer(bribesSafe, rewardAmount);
+    //                 }
+    //             }
+    //         }
+    //     }
+    // }
+
     // Add a gauge to a pool
-    function enableGauge(uint256 _pid) public onlyOperator {
+    function enableGauge(uint256 _pid, GaugeDex _gaugeDex) public onlyOperator {
         address gauge = voter.gaugeForPool(address(poolInfo[_pid].token));
         if (gauge != address(0)) {
             address[] memory rewardTokensGauge = new address[](1);
