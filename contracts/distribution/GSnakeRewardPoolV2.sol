@@ -436,7 +436,9 @@ contract GSnakeRewardPool is ReentrancyGuard {
         emit Withdraw(_sender, _pid, _amount);
     }
 
-    function claimRewards(uint256 _pid) public nonReentrant { // TODO: check if this is correct
+    // TODO: check if this is correct
+    // TODO: add payment to claim
+    function claimRewards(uint256 _pid) public nonReentrant { 
         address _sender = msg.sender;
         PoolInfo storage pool = poolInfo[_pid];
         UserInfo storage user = userInfo[_pid][_sender];
