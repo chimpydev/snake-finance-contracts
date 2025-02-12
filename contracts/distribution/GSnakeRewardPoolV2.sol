@@ -11,9 +11,11 @@ import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "../interfaces/IBasisAsset.sol";
 
-import "../shadow/interfaces/IGauge.sol";
-import "../shadow/interfaces/IShadowVoter.sol";
-import "../shadow/interfaces/ISwapxVoter.sol";
+import "../interfaces/farming/IShadowGauge.sol";
+import "../interfaces/farming/ISwapxGauge.sol";
+import "../interfaces/farming/IShadowVoter.sol";
+import "../interfaces/farming/ISwapxVoter.sol";
+import "../interfaces/farming/IX33.sol";
 
 contract GSnakeRewardPool is ReentrancyGuard {
     using SafeMath for uint256;
@@ -35,8 +37,8 @@ contract GSnakeRewardPool is ReentrancyGuard {
 
     struct GaugeInfo {
         bool isGauge;   // If this is a gauge
-        GaugeDex gaugeDex; // Dex of the gauge
         address gauge;  // The gauge
+        GaugeDex gaugeDex; // Dex of the gauge
     }
 
     // Info of each pool.
@@ -219,7 +221,7 @@ contract GSnakeRewardPool is ReentrancyGuard {
         PoolInfo storage pool = poolInfo[_pid];
         UserInfo storage user = userInfo[_pid][_user];
         uint256 accGsnakePerShare = pool.accGsnakePerShare;
-        uint256 tokenSupply = pool.gaugeInfo.isGauge ? pool.gaugeInfo.gauge.balanceOf(address(this)) : pool.token.balanceOf(address(this));
+        uint256 tokenSupply = pool.gaugeInfo.isGauge ? IShadowGauge(pool.gaugeInfo.gauge).balanceOf(address(this)) : pool.token.balanceOf(address(this));
         if (block.timestamp > pool.lastRewardTime && tokenSupply != 0) {
             uint256 _generatedReward = getGeneratedReward(pool.lastRewardTime, block.timestamp);
             uint256 _gsnakeReward = _generatedReward.mul(pool.allocPoint).div(totalAllocPoint);
@@ -258,7 +260,7 @@ contract GSnakeRewardPool is ReentrancyGuard {
         if (block.timestamp <= pool.lastRewardTime) {
             return;
         }
-        uint256 tokenSupply = pool.gaugeInfo.isGauge ? pool.gaugeInfo.gauge.balanceOf(address(this)) : pool.token.balanceOf(address(this));
+        uint256 tokenSupply = pool.gaugeInfo.isGauge ? IShadowGauge(pool.gaugeInfo.gauge).balanceOf(address(this)) : pool.token.balanceOf(address(this));
         if (tokenSupply == 0) {
             pool.lastRewardTime = block.timestamp;
             return;
@@ -280,7 +282,7 @@ contract GSnakeRewardPool is ReentrancyGuard {
     // Deposit LP tokens to earn rewards
     function updatePoolWithGaugeDeposit(uint256 _pid) public {
         PoolInfo storage pool = poolInfo[_pid];
-        address gauge = address(pool.gaugeInfo.gauge);
+        address gauge = pool.gaugeInfo.gauge;
         uint256 balance = pool.token.balanceOf(address(this));
         // Do nothing if this pool doesn't have a gauge
         if (pool.gaugeInfo.isGauge) {
@@ -291,7 +293,7 @@ contract GSnakeRewardPool is ReentrancyGuard {
                     pool.token.approve(gauge, type(uint256).max);
                 }
                 // Deposit the LP in the gauge
-                pool.gaugeInfo.gauge.deposit(balance); // NOTE: no need to check if gauge is shadow or swapx, because both have the same function
+                IShadowGauge(pool.gaugeInfo.gauge).deposit(balance); // NOTE: no need to check if gauge is shadow or swapx, because both have the same function
             }
         }
     }
@@ -310,8 +312,8 @@ contract GSnakeRewardPool is ReentrancyGuard {
     }
 
     function _claimShadowRewards(uint256 _pid) internal {
-        address[] memory gaugeRewardTokens = poolInfo.gaugeInfo.gauge.rewardsList();
-        pool.gaugeInfo.gauge.getReward(address(this), gaugeRewardTokens);
+        address[] memory gaugeRewardTokens = IShadowGauge(poolInfo.gaugeInfo.gauge).rewardsList();
+        IShadowGauge(pool.gaugeInfo.gauge).getReward(address(this), gaugeRewardTokens);
 
         for (uint256 i = 0; i < gaugeRewardTokens.length; i++) {
             IERC20 rewardToken = IERC20(gaugeRewardTokens[i]);
@@ -341,7 +343,7 @@ contract GSnakeRewardPool is ReentrancyGuard {
     }
 
     function _claimSwapxRewards(uint256 _pid) internal {
-        poolInfo.gaugeInfo.gauge.getReward(); // claim the swapx rewards
+        ISwapxGauge(poolInfo.gaugeInfo.gauge).getReward(); // claim the swapx rewards
 
         IERC20 rewardToken = IERC20(SWAPX_TOKEN);
         uint256 rewardAmount = rewardToken.balanceOf(address(this));
@@ -385,7 +387,7 @@ contract GSnakeRewardPool is ReentrancyGuard {
         // Do nothing if this pool doesn't have a gauge
         if (pool.gaugeInfo.isGauge) {
             // Withdraw from the gauge
-            pool.gaugeInfo.gauge.withdraw(_amount); // NOTE: no need to check if gauge is shadow or swapx, because both have the same function
+            IShadowGauge(pool.gaugeInfo.gauge).withdraw(_amount); // NOTE: no need to check if gauge is shadow or swapx, because both have the same function
         }
     }
 
@@ -438,7 +440,6 @@ contract GSnakeRewardPool is ReentrancyGuard {
     }
 
     // TODO: check if this is correct
-    // TODO: check if pendingrewards are not 0 before claiming or _pending > 0 is enough
     // TODO: add payment to claim
     function claimRewards(uint256 _pid) public nonReentrant { 
         address _sender = msg.sender;
@@ -451,20 +452,14 @@ contract GSnakeRewardPool is ReentrancyGuard {
 
         // Calculate the latest pending rewards
         uint256 _pending = user.amount.mul(pool.accGsnakePerShare).div(1e18).sub(user.rewardDebt);
+        uint256 _accumulatedPending = pendingRewards[_pid][_sender];
+        uint256 _rewardsToClaim = _pending.add(_accumulatedPending);
 
-        if (_pending > 0) {
-            // Store the new pending rewards
-            pendingRewards[_pid][_sender] = pendingRewards[_pid][_sender].add(_pending);
-        }
-
-        uint256 rewardsToClaim = pendingRewards[_pid][_sender];
-
-        if (rewardsToClaim > 0) {
+        if (_rewardsToClaim > 0) {
             pendingRewards[_pid][_sender] = 0;
             safeGsnakeTransfer(_sender, rewardsToClaim);
             emit RewardPaid(_sender, rewardsToClaim);
         }
-
         // Update the user’s reward debt
         user.rewardDebt = user.amount.mul(pool.accGsnakePerShare).div(1e18);
     }
