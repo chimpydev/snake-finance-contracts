@@ -283,7 +283,7 @@ contract GSnakeRewardPool is ReentrancyGuard {
                     pool.token.approve(gauge, type(uint256).max);
                 }
                 // Deposit the LP in the gauge
-                pool.gaugeInfo.gauge.depositFor(address(this), balance); // TODO: check if gauge is shadow or swapx
+                pool.gaugeInfo.gauge.deposit(balance); // NOTE: no need to check if gauge is shadow or swapx, because both have the same function
             }
         }
     }
@@ -384,7 +384,7 @@ contract GSnakeRewardPool is ReentrancyGuard {
         // Do nothing if this pool doesn't have a gauge
         if (pool.gaugeInfo.isGauge) {
             // Withdraw from the gauge
-            pool.gaugeInfo.gauge.withdraw(_amount); // TODO: check if gauge is shadow or swapx
+            pool.gaugeInfo.gauge.withdraw(_amount); // NOTE: no need to check if gauge is shadow or swapx, because both have the same function
         }
     }
 
@@ -484,7 +484,7 @@ contract GSnakeRewardPool is ReentrancyGuard {
         UserInfo storage user = userInfo[_pid][msg.sender];
         uint256 _amount = user.amount;
         withdrawFromGauge(_pid, _amount);
-        // TODO: set pendingRewards to 0
+        pendingRewards[_pid][msg.sender] = 0;
         user.amount = 0;
         user.rewardDebt = 0;
         pool.token.safeTransfer(msg.sender, _amount);
