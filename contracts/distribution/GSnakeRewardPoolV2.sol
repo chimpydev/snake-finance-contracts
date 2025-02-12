@@ -402,7 +402,9 @@ contract GSnakeRewardPool is ReentrancyGuard {
             if (_pending > 0) {
                 // safeGsnakeTransfer(_sender, _pending);
                 // emit RewardPaid(_sender, _pending);
-                pendingRewards[_pid][_sender] = pendingRewards[_pid][_sender].add(_pending); // TODO: check if this is correct
+
+                // accrue pending rewards to be claimed later
+                pendingRewards[_pid][_sender] = pendingRewards[_pid][_sender].add(_pending);
             }
         }
         if (_amount > 0 ) {
@@ -428,7 +430,9 @@ contract GSnakeRewardPool is ReentrancyGuard {
         if (_pending > 0) {
             // safeGsnakeTransfer(_sender, _pending);
             // emit RewardPaid(_sender, _pending);
-            pendingRewards[_pid][_sender] = pendingRewards[_pid][_sender].add(_pending); // TODO: check if this is correct
+
+            // accrue pending rewards to be claimed later
+            pendingRewards[_pid][_sender] = pendingRewards[_pid][_sender].add(_pending);
         }
         if (_amount > 0) {
             user.amount = user.amount.sub(_amount);
@@ -439,26 +443,38 @@ contract GSnakeRewardPool is ReentrancyGuard {
         emit Withdraw(_sender, _pid, _amount);
     }
 
+    function harvest(uint256 _pid) public nonReentrant { 
+        address _sender = msg.sender;
+        _harvest(_pid, _sender);
+    }
+
+    function harvestAll() public nonReentrant {
+        address _sender = msg.sender;
+        uint256 length = poolInfo.length;
+        for (uint256 pid = 0; pid < length; ++pid) {
+            _harvest(pid, _sender);
+        }
+    }
+
     // TODO: check if this is correct
     // TODO: add payment to claim
-    function claimRewards(uint256 _pid) public nonReentrant { 
-        address _sender = msg.sender;
+    function _harvest(uint256 _pid, address _to) internal { 
         PoolInfo storage pool = poolInfo[_pid];
-        UserInfo storage user = userInfo[_pid][_sender];
+        UserInfo storage user = userInfo[_pid][_to];
 
         // Ensure rewards are updated
         updatePool(_pid);
-        updatePoolWithGaugeDeposit(_pid);
+        updatePoolWithGaugeDeposit(_pid); // TODO: is this needed?
 
         // Calculate the latest pending rewards
         uint256 _pending = user.amount.mul(pool.accGsnakePerShare).div(1e18).sub(user.rewardDebt);
-        uint256 _accumulatedPending = pendingRewards[_pid][_sender];
+        uint256 _accumulatedPending = pendingRewards[_pid][_to];
         uint256 _rewardsToClaim = _pending.add(_accumulatedPending);
 
         if (_rewardsToClaim > 0) {
-            pendingRewards[_pid][_sender] = 0;
-            safeGsnakeTransfer(_sender, rewardsToClaim);
-            emit RewardPaid(_sender, rewardsToClaim);
+            pendingRewards[_pid][_to] = 0;
+            safeGsnakeTransfer(_to, rewardsToClaim);
+            emit RewardPaid(_to, rewardsToClaim);
         }
         // Update the user’s reward debt
         user.rewardDebt = user.amount.mul(pool.accGsnakePerShare).div(1e18);
