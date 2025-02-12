@@ -55,6 +55,7 @@ contract GSnakeRewardPool is ReentrancyGuard {
     IShadowVoter public shadowVoter;
     ISwapxVoter public swapxVoter;
     address public xSHADOW = 0x5050bc082FF4A74Fb6B0B04385dEfdDB114b2424;
+    address public x33 = 0x5050bc082FF4A74Fb6B0B04385dEfdDB114b2424;
     address public bribesSafe;
 
     // Info of each pool.
@@ -362,7 +363,7 @@ contract GSnakeRewardPool is ReentrancyGuard {
     function _enableGaugeShadow(uint256 _pid) internal {
         address gauge = shadowVoter.gaugeForPool(address(poolInfo[_pid].token));
         if (gauge != address(0)) {
-            poolInfo[_pid].gaugeInfo = GaugeInfo(true, IGauge(gauge)); // need to be addy only so it can be casted
+            poolInfo[_pid].gaugeInfo = GaugeInfo(true, IGauge(gauge)); // TODO: need to be addy only so it can be casted
         }
     }
 
@@ -370,7 +371,7 @@ contract GSnakeRewardPool is ReentrancyGuard {
         // Add the logic for swapx
         address gauge = swapxVoter.gauges(address(poolInfo[_pid].token));
         if (gauge != address(0)) {
-            poolInfo[_pid].gaugeInfo = GaugeInfo(true, IGauge(gauge)); // Need to be addy only so it can be casted
+            poolInfo[_pid].gaugeInfo = GaugeInfo(true, IGauge(gauge)); // TODO: Need to be addy only so it can be casted
         }
     }
     
