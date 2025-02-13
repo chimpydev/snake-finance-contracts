@@ -83,6 +83,7 @@ contract Masonry is ShareWrapper, ContractGuard, Operator {
 
     uint256 public withdrawLockupEpochs;
     uint256 public rewardLockupEpochs;
+    uint256 public claimRewardsBurnEpochs;
 
     /* ========== EVENTS ========== */
 
@@ -130,6 +131,7 @@ contract Masonry is ShareWrapper, ContractGuard, Operator {
 
         withdrawLockupEpochs = 4; // Lock for 4 epochs (24h) before release withdraw
         rewardLockupEpochs = 2; // Lock for 2 epochs (12h) before release claimReward
+        claimRewardsBurnEpochs = 8; // if the masonUser doesn't claim rewards in 2 days, the rewards will be burned
 
         initialized = true;
         emit Initialized(msg.sender, block.number);
@@ -143,11 +145,12 @@ contract Masonry is ShareWrapper, ContractGuard, Operator {
         _renounceOperator();
     }
 
-    function setLockUp(uint256 _withdrawLockupEpochs, uint256 _rewardLockupEpochs) external onlyOperator {
-        require(_withdrawLockupEpochs >= _rewardLockupEpochs && _withdrawLockupEpochs <= 56, "_withdrawLockupEpochs: out of range"); // <= 2 week
-        require(_withdrawLockupEpochs > 0 && _rewardLockupEpochs > 0);
+    function setLockUp(uint256 _withdrawLockupEpochs, uint256 _rewardLockupEpochs, uin256 _claimRewardsBurnEpochs) external onlyOperator {
+        require(_withdrawLockupEpochs >= _rewardLockupEpochs && _withdrawLockupEpochs <= 56 && _claimRewardsBurnEpochs <= 56, "_withdrawLockupEpochs: out of range"); // <= 2 week
+        require(_withdrawLockupEpochs > 0 && _rewardLockupEpochs > 0 && _claimRewardsBurnEpochs > 0, "lockupEpochs must be greater than 0");
         withdrawLockupEpochs = _withdrawLockupEpochs;
         rewardLockupEpochs = _rewardLockupEpochs;
+        claimRewardsBurnEpochs = _claimRewardsBurnEpochs;
     }
 
     /* ========== VIEW FUNCTIONS ========== */
@@ -176,6 +179,10 @@ contract Masonry is ShareWrapper, ContractGuard, Operator {
 
     function canClaimReward(address masonUser) external view returns (bool) {
         return masons[masonUser].epochTimerStart.add(rewardLockupEpochs) <= treasury.epoch();
+    }
+
+    function rewardsWillBeBurned(address masonUser) external view returns (bool) {
+        return masons[masonUser].epochTimerStart.add(claimRewardsBurnEpochs) <= treasury.epoch(); // if the masonUser doesn't claim rewards in 2 weeks, the rewards will be burned
     }
 
     function epoch() external view returns (uint256) {
@@ -228,10 +235,17 @@ contract Masonry is ShareWrapper, ContractGuard, Operator {
         uint256 reward = masons[msg.sender].rewardEarned;
         if (reward > 0) {
             require(masons[msg.sender].epochTimerStart.add(rewardLockupEpochs) <= treasury.epoch(), "Masonry: still in reward lockup");
+            bool willBurn = rewardsWillBeBurned(msg.sender);
             masons[msg.sender].epochTimerStart = treasury.epoch(); // reset timer
             masons[msg.sender].rewardEarned = 0;
-            snake.safeTransfer(msg.sender, reward);
-            emit RewardPaid(msg.sender, reward);
+
+            if (willBurn) {
+                snake.burn(reward);
+                emit RewardPaid(msg.sender, 0);
+            } else {
+                snake.safeTransfer(msg.sender, reward);
+                emit RewardPaid(msg.sender, reward);
+            }
         }
     }
 
