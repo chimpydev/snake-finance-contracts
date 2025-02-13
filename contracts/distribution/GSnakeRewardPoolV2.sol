@@ -373,10 +373,6 @@ contract GSnakeRewardPool is ReentrancyGuard {
             poolInfo[_pid].gaugeInfo = GaugeInfo(true, gauge);
         }
     }
-    
-    function setBribesSafe(address _bribesSafe) public onlyOperator {
-        bribesSafe = _bribesSafe;
-    }
 
     // Withdraw LP from the gauge
     function withdrawFromGauge(uint256 _pid, uint256 _amount) internal {
@@ -541,6 +537,10 @@ contract GSnakeRewardPool is ReentrancyGuard {
 
     function setOperator(address _operator) external onlyOperator {
         operator = _operator;
+    }
+
+    function setBribesSafe(address _bribesSafe) public onlyOperator {
+        bribesSafe = _bribesSafe;
     }
 
     function setPegStabilityModuleFee(uint256 _pegStabilityModuleFee) external onlyOperator {
