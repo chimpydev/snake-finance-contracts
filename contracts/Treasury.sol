@@ -24,7 +24,7 @@ contract Treasury is ContractGuard, Operator {
     /* ========= CONSTANT VARIABLES ======== */
 
     uint256 public constant PERIOD = 6 hours;
-    uint256 public constant BASIS_DIVISOR = 10000; // 100%
+    uint256 public constant BASIS_DIVISOR = 100000; // 100%
 
     /* ========== STATE VARIABLES ========== */
 
@@ -252,7 +252,7 @@ contract Treasury is ContractGuard, Operator {
         supplyTiers = [0 ether, 500000 ether, 750000 ether, 1000000 ether, 1200000 ether, 1500000 ether, 2000000 ether];
         maxExpansionTiers = [1000, 900, 800, 700, 600, 500, 200];
 
-        maxSupplyExpansionPercent = 1500; // Upto 1.5% supply for expansion // TODO: CHECK THIS VALUE
+        maxSupplyExpansionPercent = 1500;
 
         bondDepletionFloorPercent = 100000; // 100% of Bond supply for depletion floor
         seigniorageExpansionFloorPercent = 35000; // At least 35% of expansion reserved for masonry
@@ -523,7 +523,7 @@ contract Treasury is ContractGuard, Operator {
                 uint256 _percentage = previousEpochSnakePrice.sub(snakePriceOne);
                 uint256 _savedForBond;
                 uint256 _savedForMasonry;
-                uint256 _mse = _calculateMaxSupplyExpansionPercent(snakeSupply).mul(1e14); // TODO: CHECK THIS 1e14 as we updated the maxSupplyExpansionPercent with more decimals
+                uint256 _mse = _calculateMaxSupplyExpansionPercent(snakeSupply).mul(1e13);
                 if (_percentage > _mse) {
                     _percentage = _mse;
                 }
