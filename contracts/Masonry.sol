@@ -235,7 +235,7 @@ contract Masonry is ShareWrapper, ContractGuard, Operator {
         uint256 reward = masons[msg.sender].rewardEarned;
         if (reward > 0) {
             require(masons[msg.sender].epochTimerStart.add(rewardLockupEpochs) <= treasury.epoch(), "Masonry: still in reward lockup");
-            bool willBurn = rewardsWillBeBurned(msg.sender);
+            bool willBurn = masons[msg.sender].epochTimerStart.add(claimRewardsBurnEpochs) <= treasury.epoch();
             masons[msg.sender].epochTimerStart = treasury.epoch(); // reset timer
             masons[msg.sender].rewardEarned = 0;
 
