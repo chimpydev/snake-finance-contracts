@@ -62,8 +62,8 @@ contract GSnakeRewardPool is ReentrancyGuard {
     IShadowVoter public shadowVoter;
     ISwapxVoter public swapxVoter;
     address public constant XSHADOW_TOKEN = 0x5050bc082FF4A74Fb6B0B04385dEfdDB114b2424;
-    address public constant X33_TOKEN = 0x5050bc082FF4A74Fb6B0B04385dEfdDB114b2424;
-    address public constant SWAPX_TOKEN = 0x5050bc082FF4A74Fb6B0B04385dEfdDB114b2424;
+    address public constant X33_TOKEN = 0x3333111a391cc08fa51353e9195526a70b333333;
+    address public constant SWAPX_TOKEN = 0xA04BC7140c26fc9BB1F36B1A604C7A5a88fb0E70;
     address public bribesSafe;
 
     // Info of each pool.
@@ -126,14 +126,6 @@ contract GSnakeRewardPool is ReentrancyGuard {
         uint256 length = poolInfo.length;
         for (uint256 pid = 0; pid < length; ++pid) {
             require(poolInfo[pid].token != _token, "GSnakeRewardPool: existing pool?");
-        }
-    }
-
-    // bulk add pools
-    function addBulk(uint256[] calldata _allocPoints, uint256[] calldata _depFees, IERC20[] calldata _tokens, bool _withUpdate, uint256 _lastRewardTime) external onlyOperator {
-        require(_allocPoints.length == _depFees.length && _allocPoints.length == _tokens.length, "GSnakeRewardPool: invalid length");
-        for (uint256 i = 0; i < _allocPoints.length; i++) {
-            add(_allocPoints[i], _depFees[i], _tokens[i], _withUpdate, _lastRewardTime);
         }
     }
 
