@@ -12,6 +12,7 @@ import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "../interfaces/IBasisAsset.sol";
 
 import "../interfaces/IOracle.sol";
+import "../interfaces/farming/IERC4626.sol";
 import "../interfaces/farming/IShadowGauge.sol";
 import "../interfaces/farming/ISwapxGauge.sol";
 import "../interfaces/farming/IShadowVoter.sol";
