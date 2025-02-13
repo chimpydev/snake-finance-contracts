@@ -56,6 +56,7 @@ contract GSnakeRewardPool is ReentrancyGuard {
 
     IERC20 public gsnake;
     IOracle public gsnakeOracle;
+    bool public claimGaugeRewardsOnUpdatePool = true;
     bool public pegStabilityModuleFeeEnabled = true;
     uint256 public pegStabilityModuleFee = 150; // 15%
     IShadowVoter public shadowVoter;
@@ -280,7 +281,7 @@ contract GSnakeRewardPool is ReentrancyGuard {
             pool.accGsnakePerShare = pool.accGsnakePerShare.add(_gsnakeReward.mul(1e18).div(tokenSupply));
         }
         pool.lastRewardTime = block.timestamp;
-        claimAllRewards(_pid);
+        if (claimGaugeRewardsOnUpdatePool) {claimAllRewards(_pid)};
     }
     
     // Deposit LP tokens to earn rewards
@@ -561,6 +562,10 @@ contract GSnakeRewardPool is ReentrancyGuard {
 
     function setPegStabilityModuleFeeEnabled(bool _enabled) external onlyOperator {
         pegStabilityModuleFeeEnabled = _enabled;
+    }
+
+    function setClaimGaugeRewardsOnUpdatePool(bool _claimGaugeRewardsOnUpdatePool) external onlyOperator {
+        claimGaugeRewardsOnUpdatePool = _claimGaugeRewardsOnUpdatePool;
     }
 
     function governanceRecoverUnsupported(IERC20 _token, uint256 amount, address to) external onlyOperator {
