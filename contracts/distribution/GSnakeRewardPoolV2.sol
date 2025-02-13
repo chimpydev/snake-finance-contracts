@@ -453,7 +453,7 @@ contract GSnakeRewardPool is ReentrancyGuard {
         uint256 _rewardsToClaim = _pending.add(_accumulatedPending);
 
         // Ensure that the user is claiming an amount above the minimum threshold
-        require(_rewardsToClaim >= minRewardsThreshold, "Claim amount below minimum threshold");
+        require(_rewardsToClaim >= minClaimThreshold, "Claim amount below minimum threshold");
 
         if (_rewardsToClaim > 0) {
             pendingRewards[_pid][_sender] = 0;
@@ -508,7 +508,7 @@ contract GSnakeRewardPool is ReentrancyGuard {
         }
 
         // Ensure that the user is claiming an amount above the minimum threshold
-        require(totalUserRewardsToClaim >= minRewardsThreshold, "Claim amount below minimum threshold");
+        require(totalUserRewardsToClaim >= minClaimThreshold, "Claim amount below minimum threshold");
 
         if (totalUserRewardsToClaim > 0) {
             uint256 amountSonicToPay = 0;
