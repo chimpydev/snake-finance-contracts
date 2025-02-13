@@ -11,6 +11,7 @@ import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "../interfaces/IBasisAsset.sol";
 
+import "../interfaces/IOracle.sol";
 import "../interfaces/farming/IShadowGauge.sol";
 import "../interfaces/farming/ISwapxGauge.sol";
 import "../interfaces/farming/IShadowVoter.sol";
@@ -54,6 +55,9 @@ contract GSnakeRewardPool is ReentrancyGuard {
     }
 
     IERC20 public gsnake;
+    IOracle public gsnakeOracle;
+    bool public pegStabilityModuleFeeEnabled = true;
+    uint256 public pegStabilityModuleFee = 150; // 15%
     IShadowVoter public shadowVoter;
     ISwapxVoter public swapxVoter;
     address public constant XSHADOW_TOKEN = 0x5050bc082FF4A74Fb6B0B04385dEfdDB114b2424;
@@ -419,7 +423,7 @@ contract GSnakeRewardPool is ReentrancyGuard {
     }
 
     // Withdraw LP tokens.
-    function withdraw(uint256 _pid, uint256 _amount) public nonReentrant {
+    function withdraw(uint256 _pid, uint256 _amount) public payable nonReentrant {
         address _sender = msg.sender;
         PoolInfo storage pool = poolInfo[_pid];
         UserInfo storage user = userInfo[_pid][_sender];
@@ -443,9 +447,8 @@ contract GSnakeRewardPool is ReentrancyGuard {
         emit Withdraw(_sender, _pid, _amount);
     }
 
-    // TODO: check if this is correct
-    // TODO: add payment to claim
-    function harvest(uint256 _pid) public nonReentrant { 
+    // TODO: check if this is correct, mainly check if slippage on price affects amount send AND dust attack like trying to claim so little rewards that it doesnt charge eth
+    function harvest(uint256 _pid) public payable nonReentrant { 
         address _sender = msg.sender;
         PoolInfo storage pool = poolInfo[_pid];
         UserInfo storage user = userInfo[_pid][_sender];
@@ -461,16 +464,61 @@ contract GSnakeRewardPool is ReentrancyGuard {
 
         if (_rewardsToClaim > 0) {
             pendingRewards[_pid][_sender] = 0;
-            safeGsnakeTransfer(_sender, rewardsToClaim);
-            emit RewardPaid(_sender, rewardsToClaim);
+
+            if (pegStabilityModuleFeeEnabled) {
+                uint256 currentGSNAKEPriceInSonic = gsnakeOracle.twap(address(gsnake), _rewardsToClaim);
+                uint256 amountSonicToPay = (currentGSNAKEPriceInSonic.mul(_rewardsToClaim).div(1e18)).mul(pegStabilityModuleFee).div(1000);
+                require(msg.value == amountSonicToPay, "insufficient sonic for PSM cost");
+            } else {
+                require(msg.value == 0, "GSnakeRewardPool: invalid msg.value");
+            }
+
+            safeGsnakeTransfer(_sender, _rewardsToClaim);
+            emit RewardPaid(_sender, _rewardsToClaim);
         }
         // Update the user’s reward debt
         user.rewardDebt = user.amount.mul(pool.accGsnakePerShare).div(1e18);
     }
 
-    function harvestAll() public nonReentrant {
+    // TODO: check if this is correct, mainly check if slippage on price affects amount send AND dust attack like trying to claim so little rewards that it doesnt charge eth
+    function harvestAll() public payable nonReentrant {
         address _sender = msg.sender;
-        // TODO: FINISH
+        uint256 length = poolInfo.length;
+        uint256 totalUserRewardsToClaim = 0;
+
+        for (uint256 pid = 0; pid < length; ++pid) {
+            PoolInfo storage pool = poolInfo[pid];
+            UserInfo storage user = userInfo[pid][_sender];
+
+            // Ensure rewards are updated
+            updatePool(pid);
+            updatePoolWithGaugeDeposit(pid);
+
+            // Calculate the latest pending rewards
+            uint256 _pending = user.amount.mul(pool.accGsnakePerShare).div(1e18).sub(user.rewardDebt);
+            uint256 _accumulatedPending = pendingRewards[pid][_sender];
+            uint256 _rewardsToClaim = _pending.add(_accumulatedPending);
+
+            if (_rewardsToClaim > 0) {
+                pendingRewards[pid][_sender] = 0;
+                totalUserRewardsToClaim = totalUserRewardsToClaim.add(_rewardsToClaim);
+            }
+            // Update the user’s reward debt
+            user.rewardDebt = user.amount.mul(pool.accGsnakePerShare).div(1e18);
+        }
+
+        if (totalUserRewardsToClaim > 0) {
+            if (pegStabilityModuleFeeEnabled) {
+                uint256 currentGSNAKEPriceInSonic = gsnakeOracle.twap(address(gsnake), totalUserRewardsToClaim);
+                uint256 amountSonicToPay = (currentGSNAKEPriceInSonic.mul(totalUserRewardsToClaim).div(1e18)).mul(pegStabilityModuleFee).div(1000);
+                require(msg.value == amountSonicToPay, "insufficient sonic for PSM cost");
+            } else {
+                require(msg.value == 0, "GSnakeRewardPool: invalid msg.value");
+            }
+
+            safeGsnakeTransfer(_sender, totalUserRewardsToClaim);
+            emit RewardPaid(_sender, totalUserRewardsToClaim);
+        }
     }
 
     // Withdraw without caring about rewards. EMERGENCY ONLY.
@@ -502,6 +550,19 @@ contract GSnakeRewardPool is ReentrancyGuard {
         operator = _operator;
     }
 
+    function setPegStabilityModuleFee(uint256 _pegStabilityModuleFee) external onlyOperator {
+        require(_pegStabilityModuleFee <= 500, "GSnakeRewardPool: invalid peg stability module fee"); // max 50%
+        pegStabilityModuleFee = _pegStabilityModuleFee;
+    }
+
+    function setGSnakeOracle(IOracle _gsnakeOracle) external onlyOperator {
+        gsnakeOracle = _gsnakeOracle;
+    }
+
+    function setPegStabilityModuleFeeEnabled(bool _enabled) external onlyOperator {
+        pegStabilityModuleFeeEnabled = _enabled;
+    }
+
     function governanceRecoverUnsupported(IERC20 _token, uint256 amount, address to) external onlyOperator {
         uint256 length = poolInfo.length;
         for (uint256 pid = 0; pid < length; ++pid) {
@@ -509,5 +570,14 @@ contract GSnakeRewardPool is ReentrancyGuard {
             require(_token != pool.token, "ShareRewardPool: Token cannot be pool token");
         }
         _token.safeTransfer(to, amount);
+    }
+
+    /**
+     * @notice Collects the Sonic.
+     * @param amount The amount of Sonic to collect
+     */
+    function collectSonic(uint256 amount) public onlyOperator {
+        (bool sent,) = bribesSafe.call{value: amount}("");
+        require(sent, "failed to send Sonic");
     }
 }
