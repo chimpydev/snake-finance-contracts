@@ -24,6 +24,7 @@ contract GSnakeRewardPool is ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     enum GaugeDex {
+        NONE,
         SHADOW,
         SWAPX
     }
@@ -167,7 +168,7 @@ contract GSnakeRewardPool is ReentrancyGuard {
             lastRewardTime: _lastRewardTime,
             accGsnakePerShare: 0,
             isStarted: _isStarted,
-            gaugeInfo: GaugeInfo(false, address(0))
+            gaugeInfo: GaugeInfo(false, address(0), GaugeDex.NONE)
         }));
         // enableGauge(poolInfo.length - 1);
         
@@ -364,7 +365,7 @@ contract GSnakeRewardPool is ReentrancyGuard {
     function _enableGaugeShadow(uint256 _pid) internal {
         address gauge = shadowVoter.gaugeForPool(address(poolInfo[_pid].token));
         if (gauge != address(0)) {
-            poolInfo[_pid].gaugeInfo = GaugeInfo(true, gauge);
+            poolInfo[_pid].gaugeInfo = GaugeInfo(true, gauge, GaugeDex.SHADOW);
         }
     }
 
@@ -372,7 +373,7 @@ contract GSnakeRewardPool is ReentrancyGuard {
         // Add the logic for swapx
         address gauge = swapxVoter.gauges(address(poolInfo[_pid].token));
         if (gauge != address(0)) {
-            poolInfo[_pid].gaugeInfo = GaugeInfo(true, gauge);
+            poolInfo[_pid].gaugeInfo = GaugeInfo(true, gauge, GaugeDex.SWAPX);
         }
     }
 
