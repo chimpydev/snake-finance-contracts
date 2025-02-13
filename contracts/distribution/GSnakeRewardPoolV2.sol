@@ -59,6 +59,7 @@ contract GSnakeRewardPool is ReentrancyGuard {
     bool public claimGaugeRewardsOnUpdatePool = true;
     bool public pegStabilityModuleFeeEnabled = true;
     uint256 public pegStabilityModuleFee = 150; // 15%
+    uint256 public minClaimThreshold = 1e12; // 0.000001 GSNAKE
     IShadowVoter public shadowVoter;
     ISwapxVoter public swapxVoter;
     address public constant XSHADOW_TOKEN = 0x5050bc082FF4A74Fb6B0B04385dEfdDB114b2424;
@@ -436,7 +437,6 @@ contract GSnakeRewardPool is ReentrancyGuard {
         emit Withdraw(_sender, _pid, _amount);
     }
 
-    // TODO: check if this is correct, mainly check if slippage on price affects amount send AND dust attack like trying to claim so little rewards that it doesnt charge eth
     function harvest(uint256 _pid) public payable nonReentrant { 
         address _sender = msg.sender;
         PoolInfo storage pool = poolInfo[_pid];
@@ -451,25 +451,35 @@ contract GSnakeRewardPool is ReentrancyGuard {
         uint256 _accumulatedPending = pendingRewards[_pid][_sender];
         uint256 _rewardsToClaim = _pending.add(_accumulatedPending);
 
+        // Ensure that the user is claiming an amount above the minimum threshold
+        require(_rewardsToClaim >= minRewardsThreshold, "Claim amount below minimum threshold");
+
         if (_rewardsToClaim > 0) {
             pendingRewards[_pid][_sender] = 0;
 
+            uint256 amountSonicToPay = 0;
             if (pegStabilityModuleFeeEnabled) {
                 uint256 currentGSNAKEPriceInSonic = gsnakeOracle.twap(address(gsnake), _rewardsToClaim);
-                uint256 amountSonicToPay = (currentGSNAKEPriceInSonic.mul(_rewardsToClaim).div(1e18)).mul(pegStabilityModuleFee).div(1000);
-                require(msg.value == amountSonicToPay, "insufficient sonic for PSM cost");
+                amountSonicToPay = (currentGSNAKEPriceInSonic.mul(_rewardsToClaim).div(1e18)).mul(pegStabilityModuleFee).div(1000);
+                require(msg.value >= amountSonicToPay, "insufficient sonic for PSM cost");
             } else {
                 require(msg.value == 0, "GSnakeRewardPool: invalid msg.value");
             }
 
             safeGsnakeTransfer(_sender, _rewardsToClaim);
             emit RewardPaid(_sender, _rewardsToClaim);
+
+            // Refund any excess S if pegStabilityModuleFee is enabled
+            if (pegStabilityModuleFeeEnabled && msg.value > amountSonicToPay) {
+                uint256 refundAmount = msg.value - amountSonicToPay;
+                (bool success, ) = _sender.call{value: refundAmount}("");
+                require(success, "Refund failed");
+            }
         }
         // Update the user’s reward debt
         user.rewardDebt = user.amount.mul(pool.accGsnakePerShare).div(1e18);
     }
 
-    // TODO: check if this is correct, mainly check if slippage on price affects amount send AND dust attack like trying to claim so little rewards that it doesnt charge eth
     function harvestAll() public payable nonReentrant {
         address _sender = msg.sender;
         uint256 length = poolInfo.length;
@@ -496,17 +506,28 @@ contract GSnakeRewardPool is ReentrancyGuard {
             user.rewardDebt = user.amount.mul(pool.accGsnakePerShare).div(1e18);
         }
 
+        // Ensure that the user is claiming an amount above the minimum threshold
+        require(totalUserRewardsToClaim >= minRewardsThreshold, "Claim amount below minimum threshold");
+
         if (totalUserRewardsToClaim > 0) {
+            uint256 amountSonicToPay = 0;
             if (pegStabilityModuleFeeEnabled) {
                 uint256 currentGSNAKEPriceInSonic = gsnakeOracle.twap(address(gsnake), totalUserRewardsToClaim);
-                uint256 amountSonicToPay = (currentGSNAKEPriceInSonic.mul(totalUserRewardsToClaim).div(1e18)).mul(pegStabilityModuleFee).div(1000);
-                require(msg.value == amountSonicToPay, "insufficient sonic for PSM cost");
+                amountSonicToPay = (currentGSNAKEPriceInSonic.mul(totalUserRewardsToClaim).div(1e18)).mul(pegStabilityModuleFee).div(1000);
+                require(msg.value >= amountSonicToPay, "insufficient sonic for PSM cost");
             } else {
                 require(msg.value == 0, "GSnakeRewardPool: invalid msg.value");
             }
 
             safeGsnakeTransfer(_sender, totalUserRewardsToClaim);
             emit RewardPaid(_sender, totalUserRewardsToClaim);
+
+            // Refund any excess S if pegStabilityModuleFee is enabled
+            if (pegStabilityModuleFeeEnabled && msg.value > amountSonicToPay) {
+                uint256 refundAmount = msg.value - amountSonicToPay;
+                (bool success, ) = _sender.call{value: refundAmount}("");
+                require(success, "Refund failed");
+            }
         }
     }
 
@@ -554,6 +575,12 @@ contract GSnakeRewardPool is ReentrancyGuard {
 
     function setPegStabilityModuleFeeEnabled(bool _enabled) external onlyOperator {
         pegStabilityModuleFeeEnabled = _enabled;
+    }
+
+    function setMinClaimThreshold(uint256 _minClaimThreshold) external onlyOperator {
+        require(_minClaimThreshold >= 0, "GSnakeRewardPool: invalid min claim threshold");
+        require(_minClaimThreshold <= 1e18, "GSnakeRewardPool: invalid max claim threshold");
+        minClaimThreshold = _minClaimThreshold;
     }
 
     function setClaimGaugeRewardsOnUpdatePool(bool _claimGaugeRewardsOnUpdatePool) external onlyOperator {
