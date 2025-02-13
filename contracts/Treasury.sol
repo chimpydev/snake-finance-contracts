@@ -24,6 +24,7 @@ contract Treasury is ContractGuard, Operator {
     /* ========= CONSTANT VARIABLES ======== */
 
     uint256 public constant PERIOD = 6 hours;
+    uint256 public constant BASIS_DIVISOR = 10000; // 100%
 
     /* ========== STATE VARIABLES ========== */
 
@@ -112,7 +113,7 @@ contract Treasury is ContractGuard, Operator {
         _;
 
         epoch = epoch.add(1);
-        epochSupplyContractionLeft = (getSnakePrice() > snakePriceCeiling) ? 0 : getSnakeCirculatingSupply().mul(maxSupplyContractionPercent).div(10000);
+        epochSupplyContractionLeft = (getSnakePrice() > snakePriceCeiling) ? 0 : getSnakeCirculatingSupply().mul(maxSupplyContractionPercent).div(BASIS_DIVISOR);
     }
 
     modifier checkOperator {
@@ -170,7 +171,7 @@ contract Treasury is ContractGuard, Operator {
         uint256 _snakePrice = getSnakePrice();
         if (_snakePrice <= snakePriceOne) {
             uint256 _snakeSupply = getSnakeCirculatingSupply();
-            uint256 _bondMaxSupply = _snakeSupply.mul(maxDebtRatioPercent).div(10000);
+            uint256 _bondMaxSupply = _snakeSupply.mul(maxDebtRatioPercent).div(BASIS_DIVISOR);
             uint256 _bondSupply = IERC20(bsnake).totalSupply();
             if (_bondMaxSupply > _bondSupply) {
                 uint256 _maxMintableBond = _bondMaxSupply.sub(_bondSupply);
@@ -199,7 +200,7 @@ contract Treasury is ContractGuard, Operator {
                 _rate = snakePriceOne;
             } else {
                 uint256 _bondAmount = snakePriceOne.mul(1e18).div(_snakePrice); // to burn 1 SNAKE
-                uint256 _discountAmount = _bondAmount.sub(snakePriceOne).mul(discountPercent).div(10000);
+                uint256 _discountAmount = _bondAmount.sub(snakePriceOne).mul(discountPercent).div(BASIS_DIVISOR);
                 _rate = snakePriceOne.add(_discountAmount);
                 if (maxDiscountRate > 0 && _rate > maxDiscountRate) {
                     _rate = maxDiscountRate;
@@ -214,7 +215,7 @@ contract Treasury is ContractGuard, Operator {
             uint256 _snakePricePremiumThreshold = snakePriceOne.mul(premiumThreshold).div(100);
             if (_snakePrice >= _snakePricePremiumThreshold) {
                 //Price > 1.10
-                uint256 _premiumAmount = _snakePrice.sub(snakePriceOne).mul(premiumPercent).div(10000);
+                uint256 _premiumAmount = _snakePrice.sub(snakePriceOne).mul(premiumPercent).div(BASIS_DIVISOR);
                 _rate = snakePriceOne.add(_premiumAmount);
                 if (maxPremiumRate > 0 && _rate > maxPremiumRate) {
                     _rate = maxPremiumRate;
@@ -244,26 +245,26 @@ contract Treasury is ContractGuard, Operator {
         startTime = _startTime;
 
         snakePriceOne = 10 ** 18;
-        snakePriceCeiling = 1000300000000000000; // 1.003 as its stable pool
-        // snakePriceCeiling = snakePriceOne.mul(101).div(100);
+        // snakePriceCeiling = 1000300000000000000; // 1.003 as its stable pool
+        snakePriceCeiling = snakePriceOne.mul(101).div(100); // even if its stable we aim to get 1.01
 
         // Dynamic max expansion percent
         supplyTiers = [0 ether, 500000 ether, 750000 ether, 1000000 ether, 1200000 ether, 1500000 ether, 2000000 ether];
-        maxExpansionTiers = [100, 90, 80, 70, 60, 50, 20];
+        maxExpansionTiers = [1000, 900, 800, 700, 600, 500, 200];
 
-        maxSupplyExpansionPercent = 150; // Upto 1.5% supply for expansion
+        maxSupplyExpansionPercent = 1500; // Upto 1.5% supply for expansion // TODO: CHECK THIS VALUE
 
-        bondDepletionFloorPercent = 10000; // 100% of Bond supply for depletion floor
-        seigniorageExpansionFloorPercent = 3500; // At least 35% of expansion reserved for masonry
-        maxSupplyContractionPercent = 1000; // Upto 10.0% supply for contraction (to burn SNAKE and mint bsnake)
-        maxDebtRatioPercent = 3500; // Upto 35% supply of bsnake to purchase
+        bondDepletionFloorPercent = 100000; // 100% of Bond supply for depletion floor
+        seigniorageExpansionFloorPercent = 35000; // At least 35% of expansion reserved for masonry
+        maxSupplyContractionPercent = 10000; // Upto 10.0% supply for contraction (to burn SNAKE and mint bsnake)
+        maxDebtRatioPercent = 35000; // Upto 35% supply of bsnake to purchase
 
-        premiumThreshold = 110;
-        premiumPercent = 7000;
+        premiumThreshold = 1100;
+        premiumPercent = 70000;
 
         // First 12 epochs with 1.5% expansion
         bootstrapEpochs = 12;
-        bootstrapSupplyExpansionPercent = 150;
+        bootstrapSupplyExpansionPercent = 1500;
 
         // set seigniorageSaved to it's balance
         seigniorageSaved = IERC20(snake).balanceOf(address(this));
@@ -294,7 +295,7 @@ contract Treasury is ContractGuard, Operator {
     }
 
     function setMaxSupplyExpansionPercents(uint256 _maxSupplyExpansionPercent) external onlyOperator {
-        require(_maxSupplyExpansionPercent >= 10 && _maxSupplyExpansionPercent <= 1000, "_maxSupplyExpansionPercent: out of range"); // [0.1%, 10%]
+        require(_maxSupplyExpansionPercent >= 10 && _maxSupplyExpansionPercent <= 10000, "_maxSupplyExpansionPercent: out of range"); // [0.01%, 10%]
         maxSupplyExpansionPercent = _maxSupplyExpansionPercent;
     }
     // =================== ALTER THE NUMBERS IN LOGIC!!!! =================== //
@@ -314,29 +315,29 @@ contract Treasury is ContractGuard, Operator {
     function setMaxExpansionTiersEntry(uint8 _index, uint256 _value) external onlyOperator returns (bool) {
         require(_index >= 0, "Index has to be higher than 0");
         require(_index < 7, "Index has to be lower than count of tiers");
-        require(_value >= 10 && _value <= 1000, "_value: out of range"); // [0.1%, 10%]
+        require(_value >= 10 && _value <= 10000, "_value: out of range"); // [0.01%, 10%]
         maxExpansionTiers[_index] = _value;
         return true;
     }
 
     function setBondDepletionFloorPercent(uint256 _bondDepletionFloorPercent) external onlyOperator {
-        require(_bondDepletionFloorPercent >= 500 && _bondDepletionFloorPercent <= 10000, "out of range"); // [5%, 100%]
+        require(_bondDepletionFloorPercent >= 500 && _bondDepletionFloorPercent <= BASIS_DIVISOR, "out of range"); // [0.5%, 100%]
         bondDepletionFloorPercent = _bondDepletionFloorPercent;
     }
 
     function setMaxSupplyContractionPercent(uint256 _maxSupplyContractionPercent) external onlyOperator {
-        require(_maxSupplyContractionPercent >= 100 && _maxSupplyContractionPercent <= 1500, "out of range"); // [0.1%, 15%]
+        require(_maxSupplyContractionPercent >= 100 && _maxSupplyContractionPercent <= 15000, "out of range"); // [0.1%, 15%]
         maxSupplyContractionPercent = _maxSupplyContractionPercent;
     }
 
     function setMaxDebtRatioPercent(uint256 _maxDebtRatioPercent) external onlyOperator {
-        require(_maxDebtRatioPercent >= 1000 && _maxDebtRatioPercent <= 10000, "out of range"); // [10%, 100%]
+        require(_maxDebtRatioPercent >= 1000 && _maxDebtRatioPercent <= BASIS_DIVISOR, "out of range"); // [1%, 100%]
         maxDebtRatioPercent = _maxDebtRatioPercent;
     }
 
     function setBootstrap(uint256 _bootstrapEpochs, uint256 _bootstrapSupplyExpansionPercent) external onlyOperator {
         require(_bootstrapEpochs <= 120, "_bootstrapEpochs: out of range"); // <= 1 month
-        require(_bootstrapSupplyExpansionPercent >= 100 && _bootstrapSupplyExpansionPercent <= 1000, "_bootstrapSupplyExpansionPercent: out of range"); // [1%, 10%]
+        require(_bootstrapSupplyExpansionPercent >= 100 && _bootstrapSupplyExpansionPercent <= 10000, "_bootstrapSupplyExpansionPercent: out of range"); // [0.1%, 10%]
         bootstrapEpochs = _bootstrapEpochs;
         bootstrapSupplyExpansionPercent = _bootstrapSupplyExpansionPercent;
     }
@@ -350,11 +351,11 @@ contract Treasury is ContractGuard, Operator {
         uint256 _teamFundSharedPercent
     ) external onlyOperator {
         require(_daoFund != address(0), "zero");
-        require(_daoFundSharedPercent <= 1500, "out of range");
+        require(_daoFundSharedPercent <= 15000, "out of range");
         require(_devFund != address(0), "zero");
-        require(_devFundSharedPercent <= 350, "out of range");
+        require(_devFundSharedPercent <= 3500, "out of range");
         require(_teamFund != address(0), "zero");
-        require(_teamFundSharedPercent <= 550, "out of range");
+        require(_teamFundSharedPercent <= 5500, "out of range");
 
         daoFund = _daoFund;
         daoFundSharedPercent = _daoFundSharedPercent;
@@ -365,33 +366,33 @@ contract Treasury is ContractGuard, Operator {
     }
 
     function setMaxDiscountRate(uint256 _maxDiscountRate) external onlyOperator {
-        require(_maxDiscountRate <= 20000, "_maxDiscountRate is over 200%");
+        require(_maxDiscountRate <= 200000, "_maxDiscountRate is over 200%");
         maxDiscountRate = _maxDiscountRate;
     }
 
     function setMaxPremiumRate(uint256 _maxPremiumRate) external onlyOperator {
-        require(_maxPremiumRate <= 20000, "_maxPremiumRate is over 200%");
+        require(_maxPremiumRate <= 200000, "_maxPremiumRate is over 200%");
         maxPremiumRate = _maxPremiumRate;
     }
 
     function setDiscountPercent(uint256 _discountPercent) external onlyOperator {
-        require(_discountPercent <= 20000, "_discountPercent is over 200%");
+        require(_discountPercent <= 200000, "_discountPercent is over 200%");
         discountPercent = _discountPercent;
     }
 
     function setPremiumThreshold(uint256 _premiumThreshold) external onlyOperator {
         require(_premiumThreshold >= snakePriceCeiling, "_premiumThreshold exceeds snakePriceCeiling");
-        require(_premiumThreshold <= 150, "_premiumThreshold is higher than 1.5");
+        require(_premiumThreshold <= 1500, "_premiumThreshold is higher than 1.5");
         premiumThreshold = _premiumThreshold;
     }
 
     function setPremiumPercent(uint256 _premiumPercent) external onlyOperator {
-        require(_premiumPercent <= 20000, "_premiumPercent is over 200%");
+        require(_premiumPercent <= 200000, "_premiumPercent is over 200%");
         premiumPercent = _premiumPercent;
     }
 
     function setMintingFactorForPayingDebt(uint256 _mintingFactorForPayingDebt) external onlyOperator {
-        require(_mintingFactorForPayingDebt >= 10000 && _mintingFactorForPayingDebt <= 20000, "_mintingFactorForPayingDebt: out of range"); // [100%, 200%]
+        require(_mintingFactorForPayingDebt >= BASIS_DIVISOR && _mintingFactorForPayingDebt <= 200000, "_mintingFactorForPayingDebt: out of range"); // [100%, 200%]
         mintingFactorForPayingDebt = _mintingFactorForPayingDebt;
     }
 
@@ -429,7 +430,7 @@ contract Treasury is ContractGuard, Operator {
         uint256 _bondAmount = _snakeAmount.mul(_rate).div(1e18);
         uint256 snakeSupply = getSnakeCirculatingSupply();
         uint256 newBondSupply = IERC20(bsnake).totalSupply().add(_bondAmount);
-        require(newBondSupply <= snakeSupply.mul(maxDebtRatioPercent).div(10000), "over max debt ratio");
+        require(newBondSupply <= snakeSupply.mul(maxDebtRatioPercent).div(BASIS_DIVISOR), "over max debt ratio");
 
         IBasisAsset(snake).burnFrom(msg.sender, _snakeAmount);
         IBasisAsset(bsnake).mint(msg.sender, _bondAmount);
@@ -471,21 +472,21 @@ contract Treasury is ContractGuard, Operator {
 
         uint256 _daoFundSharedAmount = 0;
         if (daoFundSharedPercent > 0) {
-            _daoFundSharedAmount = _amount.mul(daoFundSharedPercent).div(10000);
+            _daoFundSharedAmount = _amount.mul(daoFundSharedPercent).div(BASIS_DIVISOR);
             IERC20(snake).transfer(daoFund, _daoFundSharedAmount);
             emit DaoFundFunded(block.timestamp, _daoFundSharedAmount);
         }
 
         uint256 _devFundSharedAmount = 0;
         if (devFundSharedPercent > 0) {
-            _devFundSharedAmount = _amount.mul(devFundSharedPercent).div(10000);
+            _devFundSharedAmount = _amount.mul(devFundSharedPercent).div(BASIS_DIVISOR);
             IERC20(snake).transfer(devFund, _devFundSharedAmount);
             emit DevFundFunded(block.timestamp, _devFundSharedAmount);
         }
 
         uint256 _teamFundSharedAmount = 0;
         if (teamFundSharedPercent > 0) {
-            _teamFundSharedAmount = _amount.mul(teamFundSharedPercent).div(10000);
+            _teamFundSharedAmount = _amount.mul(teamFundSharedPercent).div(BASIS_DIVISOR);
             IERC20(snake).transfer(teamFund, _teamFundSharedAmount);
             emit TeamFundFunded(block.timestamp, _teamFundSharedAmount);
         }
@@ -514,7 +515,7 @@ contract Treasury is ContractGuard, Operator {
         uint256 snakeSupply = getSnakeCirculatingSupply().sub(seigniorageSaved);
         if (epoch < bootstrapEpochs) {
             // 14 first epochs with 6% expansion
-            _sendToMasonry(snakeSupply.mul(bootstrapSupplyExpansionPercent).div(10000));
+            _sendToMasonry(snakeSupply.mul(bootstrapSupplyExpansionPercent).div(BASIS_DIVISOR));
         } else {
             if (previousEpochSnakePrice > snakePriceCeiling) {
                 // Expansion ($SNAKE Price > 1 $FTM): there is some seigniorage to be allocated
@@ -522,20 +523,20 @@ contract Treasury is ContractGuard, Operator {
                 uint256 _percentage = previousEpochSnakePrice.sub(snakePriceOne);
                 uint256 _savedForBond;
                 uint256 _savedForMasonry;
-                uint256 _mse = _calculateMaxSupplyExpansionPercent(snakeSupply).mul(1e14);
+                uint256 _mse = _calculateMaxSupplyExpansionPercent(snakeSupply).mul(1e14); // TODO: CHECK THIS 1e14 as we updated the maxSupplyExpansionPercent with more decimals
                 if (_percentage > _mse) {
                     _percentage = _mse;
                 }
-                if (seigniorageSaved >= bondSupply.mul(bondDepletionFloorPercent).div(10000)) {
+                if (seigniorageSaved >= bondSupply.mul(bondDepletionFloorPercent).div(BASIS_DIVISOR)) {
                     // saved enough to pay debt, mint as usual rate
                     _savedForMasonry = snakeSupply.mul(_percentage).div(1e18);
                 } else {
                     // have not saved enough to pay debt, mint more
                     uint256 _seigniorage = snakeSupply.mul(_percentage).div(1e18);
-                    _savedForMasonry = _seigniorage.mul(seigniorageExpansionFloorPercent).div(10000);
+                    _savedForMasonry = _seigniorage.mul(seigniorageExpansionFloorPercent).div(BASIS_DIVISOR);
                     _savedForBond = _seigniorage.sub(_savedForMasonry);
                     if (mintingFactorForPayingDebt > 0) {
-                        _savedForBond = _savedForBond.mul(mintingFactorForPayingDebt).div(10000);
+                        _savedForBond = _savedForBond.mul(mintingFactorForPayingDebt).div(BASIS_DIVISOR);
                     }
                 }
                 if (_savedForMasonry > 0) {
