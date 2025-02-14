@@ -461,7 +461,7 @@ contract GSnakeRewardPool is ReentrancyGuard {
 
             uint256 amountSonicToPay = 0;
             if (pegStabilityModuleFeeEnabled) {
-                uint256 currentGSNAKEPriceInSonic = gsnakeOracle.twap(address(gsnake), _rewardsToClaim);
+                uint256 currentGSNAKEPriceInSonic = gsnakeOracle.twap(address(gsnake), 1e18);
                 amountSonicToPay = (currentGSNAKEPriceInSonic.mul(_rewardsToClaim).div(1e18)).mul(pegStabilityModuleFee).div(1000);
                 require(msg.value >= amountSonicToPay, "insufficient sonic for PSM cost");
             } else {
@@ -514,7 +514,7 @@ contract GSnakeRewardPool is ReentrancyGuard {
         if (totalUserRewardsToClaim > 0) {
             uint256 amountSonicToPay = 0;
             if (pegStabilityModuleFeeEnabled) {
-                uint256 currentGSNAKEPriceInSonic = gsnakeOracle.twap(address(gsnake), totalUserRewardsToClaim);
+                uint256 currentGSNAKEPriceInSonic = gsnakeOracle.twap(address(gsnake), 1e18);
                 amountSonicToPay = (currentGSNAKEPriceInSonic.mul(totalUserRewardsToClaim).div(1e18)).mul(pegStabilityModuleFee).div(1000);
                 require(msg.value >= amountSonicToPay, "insufficient sonic for PSM cost");
             } else {
