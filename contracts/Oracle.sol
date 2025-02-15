@@ -53,8 +53,8 @@ contract Oracle is Operator {
     function _quote(
         address tokenIn,
         uint256 amountIn,
-        uint256 granularity, // number of observations to query
-        uint256 window // time window to query
+        uint256 granularity,
+        uint256 window
     ) internal view returns (uint256 amountOut) {
         uint256 observationLength = IPool(pair).observationLength();
         require(

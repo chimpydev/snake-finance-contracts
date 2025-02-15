@@ -249,10 +249,10 @@ contract Treasury is ContractGuard, Operator {
         snakePriceCeiling = snakePriceOne.mul(101).div(100); // even if its stable we aim to get 1.01
 
         // Dynamic max expansion percent
-        supplyTiers = [0 ether, 500000 ether, 750000 ether, 1000000 ether, 1200000 ether, 1500000 ether, 2000000 ether];
-        maxExpansionTiers = [1000, 900, 800, 700, 600, 500, 200];
+        supplyTiers = [0 ether, 600000 ether, 750000 ether, 1000000 ether, 1200000 ether, 1500000 ether, 2000000 ether];
+        maxExpansionTiers = [110, 90, 80, 70, 60, 50, 20]; // 0.11%, 0.09%, 0.08%, 0.07%, 0.06%, 0.05%, 0.02%
 
-        maxSupplyExpansionPercent = 1500;
+        maxSupplyExpansionPercent = 150; // 0.15%
 
         bondDepletionFloorPercent = 100000; // 100% of Bond supply for depletion floor
         seigniorageExpansionFloorPercent = 35000; // At least 35% of expansion reserved for masonry
@@ -264,7 +264,7 @@ contract Treasury is ContractGuard, Operator {
 
         // First 12 epochs with 1.5% expansion
         bootstrapEpochs = 12;
-        bootstrapSupplyExpansionPercent = 1500;
+        bootstrapSupplyExpansionPercent = 150; // 0.15%
 
         // set seigniorageSaved to it's balance
         seigniorageSaved = IERC20(snake).balanceOf(address(this));

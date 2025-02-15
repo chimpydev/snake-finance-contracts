@@ -19,7 +19,7 @@ import "../interfaces/farming/IShadowVoter.sol";
 import "../interfaces/farming/ISwapxVoter.sol";
 import "../interfaces/farming/IX33.sol";
 
-contract GSnakeRewardPool is ReentrancyGuard {
+contract GSnakeRewardPoolV2 is ReentrancyGuard {
     using SafeMath for uint256;
     using SafeERC20 for IERC20;
 
@@ -65,7 +65,7 @@ contract GSnakeRewardPool is ReentrancyGuard {
     IShadowVoter public shadowVoter;
     ISwapxVoter public swapxVoter;
     address public constant XSHADOW_TOKEN = 0x5050bc082FF4A74Fb6B0B04385dEfdDB114b2424;
-    address public constant X33_TOKEN = 0x3333111a391cc08fa51353e9195526a70b333333;
+    address public constant X33_TOKEN = 0x3333111A391cC08fa51353E9195526A70b333333;
     address public constant SWAPX_TOKEN = 0xA04BC7140c26fc9BB1F36B1A604C7A5a88fb0E70;
     address public bribesSafe;
 
@@ -112,8 +112,8 @@ contract GSnakeRewardPool is ReentrancyGuard {
         bribesSafe = _bribesSafe;
 
         // create all the pools
-        add(0.000570776255707763 ether, 0, IERC20(0x287c6882dE298665977787e268f3dba052A6e251), false, 0); // Snake-S
-        add(0.000380517503805175 ether, 0, IERC20(0xb901D7316447C84f4417b8a8268E2822095051E6), false, 0); // GSnake-S
+        add(0, 0, IERC20(0x287c6882dE298665977787e268f3dba052A6e251), false, 0); // Snake-S
+        add(0, 0, IERC20(0xb901D7316447C84f4417b8a8268E2822095051E6), false, 0); // GSnake-S
     }
 
     modifier onlyOperator() {
@@ -276,7 +276,7 @@ contract GSnakeRewardPool is ReentrancyGuard {
             pool.accGsnakePerShare = pool.accGsnakePerShare.add(_gsnakeReward.mul(1e18).div(tokenSupply));
         }
         pool.lastRewardTime = block.timestamp;
-        if (claimGaugeRewardsOnUpdatePool) {claimAllRewards(_pid)};
+        if (claimGaugeRewardsOnUpdatePool) {claimAllRewards(_pid);}
     }
     
     // Deposit LP tokens to earn rewards
@@ -312,7 +312,8 @@ contract GSnakeRewardPool is ReentrancyGuard {
     }
 
     function _claimShadowRewards(uint256 _pid) internal {
-        address[] memory gaugeRewardTokens = IShadowGauge(poolInfo.gaugeInfo.gauge).rewardsList();
+        PoolInfo storage pool = poolInfo[_pid];
+        address[] memory gaugeRewardTokens = IShadowGauge(pool.gaugeInfo.gauge).rewardsList();
         IShadowGauge(pool.gaugeInfo.gauge).getReward(address(this), gaugeRewardTokens);
 
         for (uint256 i = 0; i < gaugeRewardTokens.length; i++) {
@@ -343,7 +344,8 @@ contract GSnakeRewardPool is ReentrancyGuard {
     }
 
     function _claimSwapxRewards(uint256 _pid) internal {
-        ISwapxGauge(poolInfo.gaugeInfo.gauge).getReward(); // claim the swapx rewards
+        PoolInfo storage pool = poolInfo[_pid];
+        ISwapxGauge(pool.gaugeInfo.gauge).getReward(); // claim the swapx rewards
 
         IERC20 rewardToken = IERC20(SWAPX_TOKEN);
         uint256 rewardAmount = rewardToken.balanceOf(address(this));

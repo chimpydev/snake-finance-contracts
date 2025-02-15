@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 pragma solidity ^0.8.26;
 
-interface IGauge {
+interface IShadowGauge {
     error ZERO_AMOUNT();
 
     error CANT_NOTIFY_STAKE();

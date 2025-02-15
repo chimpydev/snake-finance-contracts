@@ -145,7 +145,7 @@ contract Masonry is ShareWrapper, ContractGuard, Operator {
         _renounceOperator();
     }
 
-    function setLockUp(uint256 _withdrawLockupEpochs, uint256 _rewardLockupEpochs, uin256 _claimRewardsBurnEpochs) external onlyOperator {
+    function setLockUp(uint256 _withdrawLockupEpochs, uint256 _rewardLockupEpochs, uint256 _claimRewardsBurnEpochs) external onlyOperator {
         require(_withdrawLockupEpochs >= _rewardLockupEpochs && _withdrawLockupEpochs <= 56 && _claimRewardsBurnEpochs <= 56, "_withdrawLockupEpochs: out of range"); // <= 2 week
         require(_withdrawLockupEpochs > 0 && _rewardLockupEpochs > 0 && _claimRewardsBurnEpochs > 0, "lockupEpochs must be greater than 0");
         withdrawLockupEpochs = _withdrawLockupEpochs;
@@ -240,7 +240,7 @@ contract Masonry is ShareWrapper, ContractGuard, Operator {
             masons[msg.sender].rewardEarned = 0;
 
             if (willBurn) {
-                snake.burn(reward);
+                IBasisAsset(address(snake)).burn(reward);
                 emit RewardPaid(msg.sender, 0);
             } else {
                 snake.safeTransfer(msg.sender, reward);
