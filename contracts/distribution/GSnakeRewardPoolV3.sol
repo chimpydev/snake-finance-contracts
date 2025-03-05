@@ -598,7 +598,7 @@ contract GSnakeRewardPoolV3 is ReentrancyGuard {
     }
 
     function setPegStabilityModuleFee(uint256 _pegStabilityModuleFee) external onlyOperator {
-        require(_pegStabilityModuleFee <= 500, "GSnakeRewardPool: invalid peg stability module fee"); // max 50%
+        require(_pegStabilityModuleFee <= 750, "GSnakeRewardPool: invalid peg stability module fee"); // max 75%
         pegStabilityModuleFee = _pegStabilityModuleFee;
     }
 
